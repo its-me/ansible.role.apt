@@ -1,0 +1,6 @@
+{% if apt_install_recommends is defined %}
+APT::Install-Recommends "{{ apt_install_recommends | lower }}";
+{% endif %}
+{% if apt_install_suggests is defined %}
+APT::Install-Suggests "{{ apt_install_suggests | lower }}";
+{% endif %}

@@ -1,0 +1,143 @@
+---
+# apt tasks
+
+
+- name: Add sources.list for {{ ansible_distribution }}
+  ansible.builtin.template:
+    src: etc/apt/sources.list.j2
+    dest: /etc/apt/sources.list
+    owner: root
+    group: root
+    mode: '0644'
+    force: true
+  become: true
+  register: _sources_list
+  tags: ['apt', 'sources']
+
+- name: Add allow for expired key of release {{ ansible_distribution_major_version }}
+  ansible.builtin.copy:
+    content: 'Acquire::Check-Valid-Until false;'
+    dest: /etc/apt/apt.conf.d/99allowexpired
+    owner: root
+    group: root
+    mode: '0644'
+    force: true
+  become: true
+  when: ansible_distribution_major_version | int < apt_latest_supported_debian|int
+  tags: ['apt', 'sources']
+
+- name: Add settings for recommended and suggested packages
+  ansible.builtin.template:
+    src: etc/apt/apt.conf.d/99recommends.j2
+    dest: /etc/apt/apt.conf.d/99recommends
+    owner: root
+    group: root
+    mode: '0644'
+    force: true
+  become: true
+  when: apt_install_recommends is defined or apt_install_suggests is defined
+  tags: ['apt', 'recommends']
+
+
+## add repo and key
+- name: Check apt_repo variable
+  ansible.builtin.fail:
+    msg: 'You must define {{ apt_repo }} in apt_all or apt_env'
+  when: apt_repo is undefined and apt[apt_repo] is undefined
+
+- name: Adding apt key
+  become: true
+  when: apt_key | length > 0
+  tags: ['apt', 'key']
+  block:
+    - name: Ensure gpg and gpg-agent are installed for apt_key ansible module
+      ansible.builtin.apt:
+        name:
+          - gpg
+          - gpg-agent
+        state: present
+        install_recommends: false
+
+    - name: Add key from keyserver for {{ apt_repo }}
+      ansible.builtin.apt_key:
+        keyserver: '{{ apt_key[0] }}'
+        id: '{{ apt_key[1] }}'
+        state: present
+      when: apt_key | length == 2
+
+    - name: Add key from url for {{ apt_repo }}
+      ansible.builtin.apt_key:
+        url: '{{ apt_key[0] }}'
+        state: present
+      when: apt_key | length == 1
+
+- name: Adding repository
+  become: true
+  when: apt_path | length > 0
+  tags: ['apt', 'repo']
+  block:
+    - name: Install apt-transport-https package
+      ansible.builtin.apt:
+        name: apt-transport-https
+        update_cache: true
+        state: present
+      # loop: '{{ apt_path | list }}'
+      # when: item.split()[1] | urlsplit('scheme') == 'https'
+      tags: ['apt', 'transport']
+
+    - name: Add repository {{ apt_repo }}
+      ansible.builtin.copy:
+        content: '{{ apt_path if apt_path is string else apt_path | join("\n") }}'
+        dest: '/etc/apt/sources.list.d/{{ apt_repo }}.list'
+        owner: root
+        group: root
+        mode: '0644'
+      register: _new_repository
+
+- name: Update packages database
+  ansible.builtin.apt:
+    update_cache: true
+  become: true
+  when: _sources_list.changed or _new_repository.changed
+  tags: ['apt', 'update']
+
+
+## pinning and install packages
+- name: Pinning packages
+  ansible.builtin.template:
+    src: etc/apt/preferences.d/package.j2
+    dest: '/etc/apt/preferences.d/{{ apt_pin.split("=")[0] | replace(".", "_") | replace("*", "_wildcard") }}'
+    owner: root
+    group: root
+    mode: '0644'
+    force: true
+  become: true
+  when: apt_pin is defined
+  tags: ['apt', 'pin']
+
+- name: Pinning and installing packages if apt_packages is defined
+  become: true
+  when: apt_packages is defined
+  tags: ['apt', 'packages']
+  block:
+    - name: Pinning packages
+      ansible.builtin.template:
+        src: etc/apt/preferences.d/package.j2
+        dest: '/etc/apt/preferences.d/{{ apt_package.split("=")[0] | replace(".", "_") }}'
+        owner: root
+        group: root
+        mode: '0644'
+        force: true
+      loop: '{{ apt_packages | flatten }}'
+      loop_control:
+        loop_var: apt_package
+      when: (apt_path | length > 0 or apt_package.split('=')[1] is defined) and apt_pin is undefined
+      tags: ['apt', 'pin']
+
+    - name: Install packages
+      ansible.builtin.apt:
+        name: '{{ query("flattened", apt_packages) }}'
+        update_cache: true
+        cache_valid_time: 60
+        state: present
+      tags: ['apt', 'install']

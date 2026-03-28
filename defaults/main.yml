@@ -1,0 +1,18 @@
+---
+# apt defaults
+
+
+apt_all: {}
+apt_env: {}
+apt: '{{ apt_all | combine(apt_env, recursive=True) }}'
+
+# repository name defined in apt_all and apt_env
+apt_repo:
+
+apt_path: '{{ apt[apt_repo].repo if (apt[apt_repo] is defined and apt[apt_repo].repo is defined) else None }}'
+apt_key: '{{ apt[apt_repo].key.split("=") if (apt[apt_repo] is defined and apt[apt_repo].key is defined) else None }}'
+
+apt_mirror_main: http://deb.debian.org
+apt_mirror_security: http://security.debian.org
+
+apt_latest_supported_debian: 10

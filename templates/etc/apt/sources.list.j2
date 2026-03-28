@@ -1,0 +1,10 @@
+deb {{ apt_mirror_main }}/debian {{ ansible_distribution_release }} main contrib non-free-firmware
+deb-src {{ apt_mirror_main }}/debian {{ ansible_distribution_release }} main contrib non-free-firmware
+
+deb {{ apt_mirror_security }}/debian-security {{ ansible_distribution_release }}-security main contrib non-free-firmware
+deb-src {{ apt_mirror_security }}/debian-security {{ ansible_distribution_release }}-security main contrib non-free-firmware
+
+{% if ansible_distribution_major_version|int >= apt_latest_supported_debian|int %}
+deb {{ apt_mirror_main }}/debian {{ ansible_distribution_release }}-updates main contrib non-free-firmware
+deb-src {{ apt_mirror_main }}/debian {{ ansible_distribution_release }}-updates main contrib non-free-firmware
+{% endif %}

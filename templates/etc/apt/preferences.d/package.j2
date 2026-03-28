@@ -1,0 +1,18 @@
+{% if apt_package is defined %}
+{%  set pkg = apt_package.split('=') %}
+{% elif apt_pin is defined %}
+{%  set pkg = apt_pin.split('=') %}
+{% endif %}
+
+Package: {{ pkg[0] }}
+{% if pkg[1] is defined %}
+Pin: version {{ pkg[1] }}
+Pin-Priority: 1001
+{% else %}
+{%  if apt_repo is string %}
+Pin: origin {{ apt_path.split(' ')[1] | urlsplit('hostname') }}
+{%  else %}
+Pin: origin {{ apt_path[0].split(' ')[1] | urlsplit('hostname') }}
+{%  endif %}
+Pin-Priority: 999
+{% endif %}
